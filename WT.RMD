@@ -1,0 +1,183 @@
+---
+title: "scRNA"
+author: "Amos"
+date: "2023-03-06"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE, echo=FALSE}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library("ggpubr")
+#ssh holidayincambodia in case full check w/ htop
+# cd /project/SoftPrak2023
+
+load("WT.Robj", verbose=TRUE)
+wt_meta=WT@meta.data
+
+
+
+
+```
+
+# Overview of the dataset
+## Number of samples per timepoint 
+```{r, include=T, echo=F}
+
+replicates_per_stage=wt_meta %>% 
+  group_by(stage, embryo)%>%
+  summarise()%>%
+  count()
+
+  
+pdf("./HAP_group/WT/plots/replicates_per_stage.pdf")
+ggplot(aes(x=stage, y=n), data=replicates_per_stage)+
+  geom_bar(stat="identity",position="dodge")+
+  ylab("# replicates")
+dev.off()
+
+
+ggplot(aes(x=stage, y=n), data=replicates_per_stage)+
+  geom_bar(stat="identity",position="dodge")+
+  ylab("# samples")
+```
+
+## Sex distribution of samples
+```{r, include=T, echo=F}
+
+sex_per_stage=wt_meta %>% 
+  group_by(sex, stage, embryo)%>%
+  summarise()%>%
+  count()
+male_per_stage=subset(sex_per_stage, sex=="male")
+female_per_stage=subset(sex_per_stage, sex=="female")
+male_ratio=paste0(round(male_per_stage$n/(female_per_stage$n+male_per_stage$n), 1)*100, "%")
+female_ratio=paste0(round(female_per_stage$n/(female_per_stage$n+male_per_stage$n), 1)*100, "%")
+
+sex_per_stage$male_female_ratio=c(female_ratio, male_ratio)
+
+pdf("./HAP_group/WT/plots/sex_per_stage.pdf")
+ggplot(aes(x=stage, y=n, fill=sex), data=sex_per_stage)+
+  geom_bar(stat="identity",position="stack")+
+  geom_text(aes(label=male_female_ratio),position = position_stack(vjust = 0.5))+
+  ylab("# samples")
+dev.off()
+
+ggplot(aes(x=stage, y=n, fill=sex), data=sex_per_stage)+
+  geom_bar(stat="identity",position="stack")+
+  geom_text(aes(label=male_female_ratio),position = position_stack(vjust = 0.5))+
+  ylab("# samples")
+```
+
+#How many components?
+## Elbow plot heuristic suggests 1:9 PCs
+```{r, include=T, echo=F}
+#PCA
+
+pdf("./HAP_group/WT/plots/dims/elbow_100.pdf")
+ElbowPlot(WT, ndims=100)
+dev.off()
+#suggests PCs 1:9
+ElbowPlot(WT)
+
+
+```
+
+## PCA
+
+```{r, echo=F, include=T}
+DimPlot(WT, reduction = "pca")
+DimHeatmap(WT, dims = 1:100, cells = 500, balanced = TRUE)
+
+
+pdf("./HAP_group/WT/plots/dims/dimheatmap_1_20.pdf")
+DimHeatmap(WT, dims = 1:20, cells = 500, balanced = TRUE)
+dev.off()
+
+
+pdf("./HAP_group/WT/plots/dims/pca.pdf")
+DimPlot(WT, reduction = "pca")
+dev.off()
+```
+
+## Jackstraw method
+```{r, include=T, echo=F}
+
+#WT <- JackStraw(WT, num.replicate = 100)
+#WT <- ScoreJackStraw(WT, dims = 1:20)
+JackStrawPlot(WT, dims = 1:15)
+
+pdf("./HAP_group/WT/plots/dims/Jackstraw.pdf")
+JackStrawPlot(WT, dims = 1:15)
+dev.off()
+
+```
+
+#Dimensions summary
+Elbow: 
+PCA heatmap:
+Jackstraw: 
+
+#Clustering using dimensions
+```{r, echo=F, include=T}
+WT <- FindNeighbors(WT, dims = 1:10)
+WT <- FindClusters(WT, resolution = 0.5)
+```
+
+#t-SNE
+```{r, echo=F, include=T}
+WT=RunTSNE(WT)
+pdf("./HAP_group/WT/plots/dims/tsne.pdf")
+DimPlot(object = WT, reduction = "tsne")
+dev.off()
+
+#sanity check
+pdf("./HAP_group/WT/plots/dims/tsne_orig.ident.pdf")
+DimPlot(object = WT, reduction = "tsne", group.by="orig.ident")
+dev.off()
+
+pdf("./HAP_group/WT/plots/dims/tsne_stages.pdf")
+DimPlot(object = WT, reduction = "tsne", group.by="stage")
+dev.off()
+pdf("./HAP_group/WT/plots/dims/tsne_phase.pdf")
+DimPlot(object = WT, reduction = "tsne", group.by="Phase")
+dev.off()
+pdf("./HAP_group/WT/plots/dims/tsne_embryo.pdf")
+DimPlot(object = WT, reduction = "tsne", group.by="embryo")
+dev.off()
+pdf("./HAP_group/WT/plots/dims/tsne_sex.pdf")
+DimPlot(object = WT, reduction = "tsne", group.by="sex")
+dev.off()
+
+tsne_stage=DimPlot(object = WT, reduction = "tsne", group.by="stage")
+tsne_phase=DimPlot(object = WT, reduction = "tsne", group.by="Phase")
+tsne_embryo=DimPlot(object = WT, reduction = "tsne", group.by="embryo")+ theme(legend.text=element_text(size=4), legend.spacing.x = unit(0.01, 'cm'),legend.key.size = unit(0.1,"line"))
+  
+tsne_sex=DimPlot(object = WT, reduction = "tsne", group.by="sex")
+
+
+pdf("./HAP_group/WT/plots/dims/tsne_stage_phase_embryo_sex.pdf")
+ggarrange(tsne_stage, tsne_embryo, tsne_phase,tsne_sex,  
+          labels = c("A", "B", "C", "D"),
+          ncol = 2, nrow = 2)
+
+dev.off()
+
+
+
+```
+
+#UMAP
+```{r, echo=F, include=T}
+pdf("./HAP_group/WT/plots/dims/umap.pdf")
+DimPlot(WT, reduction = "umap")
+dev.off()
+```
+
+```{r, echo=F}
+rmarkdown::render()
+```
